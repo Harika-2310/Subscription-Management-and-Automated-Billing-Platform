@@ -279,4 +279,4 @@ celery -A app.core.celery_app beat --loglevel=info
 
 B.Tech – Computer Science Engineering
 
-Subscription Management Backend – Internship Project
+Subscription Management and Automated Billing Platform  – Internship Project

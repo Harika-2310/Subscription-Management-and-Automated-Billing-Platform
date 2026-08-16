@@ -1,12 +1,26 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from decimal import Decimal
 
-from app.models.subscription import Subscription,SubscriptionStatus
+from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.plan import Plan
+from app.models.invoice import Invoice
+from app.models.refund import Refund
+
 from app.schemas.subscription import SubscriptionCreate
 
+from app.services.proration import calculate_proration
+from app.services.refund_service import calculate_refund
 
-def create_subscription(db: Session, subscription: SubscriptionCreate):
+
+# ============================================================
+# CREATE SUBSCRIPTION
+# ============================================================
+
+def create_subscription(
+    db: Session,
+    subscription: SubscriptionCreate
+):
 
     plan = db.query(Plan).filter(
         Plan.id == subscription.plan_id
@@ -15,7 +29,10 @@ def create_subscription(db: Session, subscription: SubscriptionCreate):
     if not plan:
         return None
 
-    trial_end = datetime.utcnow() + timedelta(days=plan.trial_days)
+    trial_end = (
+        datetime.utcnow()
+        + timedelta(days=plan.trial_days)
+    )
 
     db_subscription = Subscription(
         user_id=subscription.user_id,
@@ -32,22 +49,23 @@ def create_subscription(db: Session, subscription: SubscriptionCreate):
     return db_subscription
 
 
+# ============================================================
+# SUBSCRIPTION STATUS TRANSITIONS
+# ============================================================
+
 VALID_TRANSITIONS = {
-    SubscriptionStatus.trial: [
-        SubscriptionStatus.active,
-        SubscriptionStatus.cancelled
-    ],
-    SubscriptionStatus.active: [
-        SubscriptionStatus.past_due
-    ],
-    SubscriptionStatus.past_due: [
-        SubscriptionStatus.cancelled
-    ],
-    SubscriptionStatus.cancelled: []
+    "trial": ["active", "cancelled"],
+    "active": ["past_due"],
+    "past_due": ["cancelled"],
+    "cancelled": []
 }
 
 
-def change_subscription_status(db: Session, subscription_id: int, new_status: str):
+def change_subscription_status(
+    db: Session,
+    subscription_id: int,
+    new_status: str
+):
 
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id
@@ -57,12 +75,17 @@ def change_subscription_status(db: Session, subscription_id: int, new_status: st
         return None, "Subscription not found"
 
     current_status = subscription.status
-    target_status = SubscriptionStatus(new_status)
-    if target_status not in VALID_TRANSITIONS[current_status]:
-        return None, f"Invalid transition from {current_status.value} to {new_status}"
 
-    subscription.status = target_status
-    subscription.status = SubscriptionStatus(new_status)
+    if current_status not in VALID_TRANSITIONS:
+        return None, f"Unknown subscription status: {current_status}"
+
+    if new_status not in VALID_TRANSITIONS[current_status]:
+        return None, (
+            f"Invalid transition from "
+            f"{current_status} to {new_status}"
+        )
+
+    subscription.status = new_status
 
     db.commit()
     db.refresh(subscription)
@@ -70,11 +93,15 @@ def change_subscription_status(db: Session, subscription_id: int, new_status: st
     return subscription, None
 
 
-# ----------------------------
-# ADD THIS FUNCTION BELOW
-# ----------------------------
+# ============================================================
+# CHANGE PLAN + PRORATION
+# ============================================================
 
-def change_plan(db: Session, subscription_id: int, new_plan_id: int):
+def change_plan(
+    db: Session,
+    subscription_id: int,
+    new_plan_id: int
+):
 
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id
@@ -83,20 +110,66 @@ def change_plan(db: Session, subscription_id: int, new_plan_id: int):
     if not subscription:
         return None
 
-    plan = db.query(Plan).filter(
+    old_plan = db.query(Plan).filter(
+        Plan.id == subscription.plan_id
+    ).first()
+
+    if not old_plan:
+        return None
+
+    new_plan = db.query(Plan).filter(
         Plan.id == new_plan_id
     ).first()
 
-    if not plan:
+    if not new_plan:
         return False
 
+    # Assume a 30-day billing cycle
+    total_cycle_days = 30
+
+    if subscription.start_date:
+        days_used = (
+            datetime.utcnow() - subscription.start_date
+        ).days
+    else:
+        days_used = 0
+
+    days_used = min(
+        max(days_used, 0),
+        total_cycle_days
+    )
+
+    days_remaining = (
+        total_cycle_days - days_used
+    )
+
+    proration = calculate_proration(
+        old_price=Decimal(str(old_plan.price)),
+        new_price=Decimal(str(new_plan.price)),
+        days_remaining=days_remaining,
+        total_cycle_days=total_cycle_days
+    )
+
+    # Change plan
     subscription.plan_id = new_plan_id
 
     db.commit()
     db.refresh(subscription)
 
-    return subscription
-def pause_subscription(db: Session, subscription_id: int):
+    return {
+        "subscription": subscription,
+        "proration": proration
+    }
+
+
+# ============================================================
+# PAUSE SUBSCRIPTION
+# ============================================================
+
+def pause_subscription(
+    db: Session,
+    subscription_id: int
+):
 
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id
@@ -111,7 +184,16 @@ def pause_subscription(db: Session, subscription_id: int):
     db.refresh(subscription)
 
     return subscription
-def resume_subscription(db: Session, subscription_id: int):
+
+
+# ============================================================
+# RESUME SUBSCRIPTION
+# ============================================================
+
+def resume_subscription(
+    db: Session,
+    subscription_id: int
+):
 
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id
@@ -126,7 +208,17 @@ def resume_subscription(db: Session, subscription_id: int):
     db.refresh(subscription)
 
     return subscription
-def cancel_subscription(db: Session, subscription_id: int, immediate: bool):
+
+
+# ============================================================
+# CANCEL SUBSCRIPTION + AUTOMATIC REFUND
+# ============================================================
+
+def cancel_subscription(
+    db: Session,
+    subscription_id: int,
+    immediate: bool
+):
 
     subscription = db.query(Subscription).filter(
         Subscription.id == subscription_id
@@ -135,10 +227,87 @@ def cancel_subscription(db: Session, subscription_id: int, immediate: bool):
     if not subscription:
         return None
 
+    # --------------------------------------------------------
+    # IMMEDIATE CANCELLATION
+    # --------------------------------------------------------
+
     if immediate:
+
+        # Find current plan
+        plan = db.query(Plan).filter(
+            Plan.id == subscription.plan_id
+        ).first()
+
+        if plan:
+
+            # Calculate used days
+            if subscription.start_date:
+
+                days_used = (
+                    datetime.utcnow()
+                    - subscription.start_date
+                ).days
+
+            else:
+                days_used = 0
+
+            # Monthly billing cycle
+            total_cycle_days = 30
+
+            # Keep value between 0 and 30
+            days_used = min(
+                max(days_used, 0),
+                total_cycle_days
+            )
+
+            # Calculate unused-period refund
+            refund_data = calculate_refund(
+                plan_price=Decimal(
+                    str(plan.price)
+                ),
+                days_used=days_used,
+                total_cycle_days=total_cycle_days
+            )
+
+            # Find latest invoice
+            invoice = db.query(Invoice).filter(
+                Invoice.subscription_id == subscription_id
+            ).order_by(
+                Invoice.id.desc()
+            ).first()
+
+            # Create refund
+            if (
+                invoice
+                and refund_data["refund_amount"] > 0
+            ):
+
+                refund = Refund(
+                    invoice_id=invoice.id,
+                    amount=refund_data["refund_amount"],
+                    reason=(
+                        "Subscription cancelled "
+                        "with unused period"
+                    ),
+                    status="processed"
+                )
+
+                db.add(refund)
+
+                # Update invoice
+                invoice.status = "refunded"
+
+        # Cancel subscription
         subscription.status = SubscriptionStatus.cancelled
+
         subscription.end_date = datetime.utcnow()
+
+    # --------------------------------------------------------
+    # END-OF-CYCLE CANCELLATION
+    # --------------------------------------------------------
+
     else:
+
         subscription.cancel_at_period_end = True
 
     db.commit()

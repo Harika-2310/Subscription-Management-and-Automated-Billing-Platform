@@ -6,6 +6,7 @@ class PaymentCreate(BaseModel):
     invoice_id: int
     amount: float
     payment_method: str
+    success_rate: int = 80
 
 
 class PaymentResponse(BaseModel):
@@ -14,7 +15,7 @@ class PaymentResponse(BaseModel):
     amount: float
     payment_method: str
     status: str
-    paid_at: datetime
+    paid_at: datetime | None
 
     class Config:
         from_attributes = True

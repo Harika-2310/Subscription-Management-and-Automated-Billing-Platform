@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric
 from datetime import datetime
 
 from app.database.base import Base
@@ -9,14 +9,68 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    invoice_number = Column(
+        String(50),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
     subscription_id = Column(
         Integer,
         ForeignKey("subscriptions.id"),
         nullable=False
     )
 
-    amount = Column(Float, nullable=False)
+    plan_fee = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
 
-    status = Column(String(20), default="pending")
+    proration_amount = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    usage_charges = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
+
+    subtotal = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
+
+    tax_rate = Column(
+        Numeric(5, 2),
+        nullable=False,
+        default=18
+    )
+
+    tax = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
+
+    total = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0
+    )
+
+    status = Column(
+        String(20),
+        default="pending",
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

@@ -98,7 +98,10 @@ def update_plan(
         )
 
     return {
-        "message": "Plan changed successfully"
+        "message": "Plan changed successfully",
+        "subscription_id": result["subscription"].id,
+        "new_plan_id": result["subscription"].plan_id,
+        "proration": result["proration"]
     }
 @router.put("/{subscription_id}/pause")
 def pause(

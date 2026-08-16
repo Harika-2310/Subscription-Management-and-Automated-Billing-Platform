@@ -262,15 +262,25 @@ celery -A app.core.celery_app beat --loglevel=info
 
 ---
 
-# Future Enhancements
+## Weeks 3–4 Completed
 
-- Payment Gateway Integration
-- PDF Invoice Generation
-- Tax Calculation
-- Usage-Based Billing
-- Retry Logic for Failed Payments
-- React Admin Dashboard
+- Proration calculation
+- Invoice generation
+- Tax calculation
+- Mock payment gateway
+- Payment webhook handling
+- Refund processing
 
+## Future Enhancements
+
+- Integration with a real payment gateway such as Stripe or Razorpay
+- Advanced PDF invoice generation and customization
+- Automated tax calculation based on location and applicable tax rules
+- Advanced usage-based billing and metered charges
+- Automatic retry and dunning logic for failed payments
+- React-based admin dashboard
+- Email/SMS notifications for payment and subscription events
+- Advanced billing analytics and reporting
 ---
 
 # Author

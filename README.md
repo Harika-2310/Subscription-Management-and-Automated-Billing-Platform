@@ -271,6 +271,19 @@ celery -A app.core.celery_app beat --loglevel=info
 - Payment webhook handling
 - Refund processing
 
+  ## Week 5–6: Billing & Payment Automation
+
+- Implemented invoice generation with tax and usage charges.
+- Added tax calculation and tax reporting.
+- Added invoice PDF generation using ReportLab.
+- Implemented payment processing and failed payment handling.
+- Added payment retry mechanism with a maximum of 3 retries.
+- Added retry scheduling and subscription cancellation after failed retries.
+- Developed React-based billing dashboard.
+- Added MRR, churn rate, trial conversion, and failed payment metrics.
+- Integrated React frontend with FastAPI backend.
+- Tested invoice, payment, retry, tax, PDF, and dashboard features successfully.
+
 ## Future Enhancements
 
 - Integration with a real payment gateway such as Stripe or Razorpay

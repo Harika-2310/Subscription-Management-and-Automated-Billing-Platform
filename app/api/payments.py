@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.database.database import get_db
 from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.crud.payment import make_payment
 from app.crud.payment import create_payment
-
+from app.crud.payment import retry_failed_payment
 
 router = APIRouter(
     prefix="/payments",
@@ -12,27 +13,29 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "/process",
-    response_model=PaymentResponse
-)
-def process_payment_api(
+@router.post("/", response_model=PaymentResponse)
+def pay(
     payment: PaymentCreate,
     db: Session = Depends(get_db)
 ):
+    return make_payment(db, payment,success_rate=0)
 
-    result = create_payment(
-        db=db,
-        invoice_id=payment.invoice_id,
-        amount=payment.amount,
-        payment_method=payment.payment_method,
-        success_rate=payment.success_rate
+
+@router.post("/retry/{payment_id}", response_model=PaymentResponse)
+def retry_payment(
+    payment_id: int,
+    db: Session = Depends(get_db)
+):
+    payment = retry_failed_payment(
+        db,
+        payment_id,
+        success_rate=0
     )
 
-    if result is None:
+    if payment is None:
         raise HTTPException(
             status_code=404,
-            detail="Invoice not found"
+            detail="Payment not found"
         )
 
-    return result
+    return payment

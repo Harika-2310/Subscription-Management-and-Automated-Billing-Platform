@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime
 from datetime import datetime
+
 from app.database.base import Base
 
 
@@ -20,4 +21,17 @@ class Payment(Base):
 
     status = Column(String(20), default="pending")
 
-    paid_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+    # Week 5-6: Failed payment retry
+    retry_count = Column(Integer, default=0)
+
+    next_retry_at = Column(DateTime, nullable=True)
+
+    last_attempt_at = Column(DateTime, nullable=True)
+
+    # Original payment failure time
+    original_failure_at = Column(
+        DateTime,
+        nullable=True
+    )

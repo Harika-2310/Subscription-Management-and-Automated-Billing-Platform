@@ -21,6 +21,16 @@ class Invoice(Base):
         ForeignKey("subscriptions.id"),
         nullable=False
     )
+    country = Column(
+    String(10),
+    nullable=False,
+    default="IN"
+    )
+
+    region = Column(
+    String(50),
+    nullable=True
+    )
 
     plan_fee = Column(
         Numeric(10, 2),

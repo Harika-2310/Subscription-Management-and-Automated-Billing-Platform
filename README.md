@@ -283,6 +283,16 @@ celery -A app.core.celery_app beat --loglevel=info
 - Added MRR, churn rate, trial conversion, and failed payment metrics.
 - Integrated React frontend with FastAPI backend.
 - Tested invoice, payment, retry, tax, PDF, and dashboard features successfully.
+  ## Weeks 7–8: System Integration, Testing & Project Finalization
+
+- Conducted end-to-end integration testing across subscription, billing, invoice, payment, retry,      tax, PDF, and dashboard modules.
+- Performed load testing using Locust with 10 concurrent users.
+- Processed 162 requests with **0 failures**, an average response time of **16.65 ms**, and average    throughput of **5.3 requests/second**.
+- Improved React frontend loading and error handling.
+- Added responsive design for desktop, tablet, and mobile devices.
+- Verified dashboard, tax report, failed payments, and invoice PDF functionality.
+- Prepared system architecture, data flow, API, database, and deployment documentation.
+- Finalized the project implementation and prepared the project for mentor review and submission.
 
 ## Future Enhancements
 
